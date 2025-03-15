@@ -82,7 +82,6 @@ def url_request(url, max_redirects=2, redirect_count=0):
                     text = soup.get_text(separator='\n', strip=True)
                     text = unidecode(text)
                     print(text)
-
                 cached_responses[url] = (response_str, time.time())
 
 
@@ -90,7 +89,6 @@ def clear_cache():
     global cached_responses
     cached_responses = {}
     print("Cache has been cleared.")
-
 
 def show_cache():
     if cached_responses:
@@ -183,8 +181,22 @@ def main():
 
             if len(command) == 0:
                 continue
-
             if command[0] == "exit":
+            elif command[0] == "go2web":
+                if len(command) >= 3:
+                    if command[1] == "-u":
+                        url_request(command[2])
+                    elif command[1] == "-s":
+                        search('+'.join(command[2:]))
+                    else:
+                        print("Invalid command")
+                elif len(command) == 2 and command[1] == "-h":
+                    help()
+                elif len(command) == 2 and command[1] == "-cache":
+                    show_cache()
+                else:
+                    print("Invalid command")
+            elif command[0] == "exit":
                 break
 
             if command[0] != "go2web":
