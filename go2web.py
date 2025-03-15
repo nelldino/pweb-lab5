@@ -10,7 +10,6 @@ import datetime
 
 cached_responses = {}
 
-
 def help():
     print("Available commands are:\n\
             go2web -u <URL>         # make an HTTP request to URL and print the response\n\
@@ -90,7 +89,6 @@ def show_cache():
     else:
         print("Cache is empty.")
 
-
 def main():
     command = sys.argv
 
@@ -106,8 +104,7 @@ def main():
         help()
 
     elif len(command) == 2 and command[1] == "-cache":
-        show_cache()  # This will show the cache when the user enters `-cache` option
-
+        show_cache()  
     else:
         while True:
             user_input = input("Enter a command (enter go2web -h to see all commands) or 'exit' to exit:\n> ")
@@ -118,6 +115,7 @@ def main():
                 if len(command) >= 3:
                     if command[1] == "-u":
                         url_request(command[2])
+                        print("url")
                     elif command[1] == "-s":
                         print("search")
                     else:
