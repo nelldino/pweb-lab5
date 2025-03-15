@@ -1,4 +1,5 @@
-
+import ast
+import json
 import sys
 import ssl
 import socket
@@ -9,6 +10,9 @@ from unidecode import unidecode
 import datetime
 
 cached_responses = {}
+GOOGLE_API_KEY = "AIzaSyCgdShmwIXVVDUzR1zc_UXhxFwrdUTQ5Qc"
+GOOGLE_CX = "c6319817e2afd4b56"
+RESULTS_NR = 10
 
 def help():
     print("Available commands are:\n\
@@ -88,6 +92,66 @@ def show_cache():
             print(f"Timestamp: {datetime.datetime.fromtimestamp(timestamp)}\n")
     else:
         print("Cache is empty.")
+def search(query):
+    # Define the host and SSL context
+    host = "www.googleapis.com"
+    context = ssl.create_default_context()
+
+    # Establish a connection with the host and send an HTTP GET request
+    with socket.create_connection((host, 443)) as sock:
+        with context.wrap_socket(sock, server_hostname=host) as sslsock:
+            # Compose the HTTP GET request to search for the query on Google Custom Search API
+            request = f"GET https://www.googleapis.com/customsearch/v1?key={GOOGLE_API_KEY}&cx={GOOGLE_CX}&q={query} HTTP/1.0\r\nHost:{host}\r\nAccept: text/html, application/json\r\n\r\n"
+            sslsock.send(request.encode())
+
+            # Receive the response from the server and parse the JSON data
+            resp_str = ''
+            for data in iter(lambda: sslsock.recv(4096), b""):
+                resp_str += data.decode('utf-8')
+
+            json_start = resp_str.find("{")
+            json_end = resp_str.rfind("}") + 1
+            json_str = resp_str[json_start:json_end]
+
+            try:
+                response = json.loads(json_str)
+            except json.JSONDecodeError:
+                print("Failed to decode JSON.")
+                return
+
+            print(f"Top {RESULTS_NR} search results for '{query}':\n")
+
+            for i in range(1, RESULTS_NR + 1):
+                item = response["items"][i - 1]
+                title = item.get("title", "No title available")
+                link = item.get("link", "No link available")
+                print(f"{i}. {title}")
+                print(f"Link: {link}\n")
+
+            # Store the links in a global list variable
+            global link_list
+            link_list = [item["link"] for item in response["items"]]
+
+            # Call the access_link function to allow the user to open a link
+            access_link()
+
+
+
+def access_link():
+    # Loop through the search results and prompt the user to choose a link to open
+    for i in range(RESULTS_NR + 1):
+        print(f"Enter a number between 1 and {RESULTS_NR} to open a link, or 'exit' to exit.\n")
+        user_input = input()
+        if user_input == 'exit':
+            break
+        try:
+            link_index = int(user_input) - 1
+            if 0 <= link_index < RESULTS_NR:
+                url_request(link_list[link_index])
+            else:
+                print(f"Invalid input. Please enter a number between 1 and {RESULTS_NR} or 'exit'.")
+        except:
+            print(f"Invalid input. Please enter a number between 1 and {RESULTS_NR} or 'exit'.")
 
 def main():
     command = sys.argv
@@ -96,7 +160,7 @@ def main():
         if command[1] == "-u":
             url_request(command[2])
         elif command[1] == "-s":
-            print("search")
+            search('+'.join(command[2:]))
         else:
             print("Invalid command")
 
@@ -117,13 +181,13 @@ def main():
                         url_request(command[2])
                         print("url")
                     elif command[1] == "-s":
-                        print("search")
+                        search('+'.join(command[2:]))
                     else:
                         print("Invalid command")
                 elif len(command) == 2 and command[1] == "-h":
                     help()
                 elif len(command) == 2 and command[1] == "-cache":
-                    show_cache()  # Show cache when `-cache` is used
+                    show_cache()
                 else:
                     print("Invalid command")
             elif command[0] == "exit":
