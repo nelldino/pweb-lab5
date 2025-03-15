@@ -14,12 +14,14 @@ GOOGLE_API_KEY = "AIzaSyCgdShmwIXVVDUzR1zc_UXhxFwrdUTQ5Qc"
 GOOGLE_CX = "c6319817e2afd4b56"
 RESULTS_NR = 10
 
+
 def help():
     print("Available commands are:\n\
             go2web -u <URL>         # make an HTTP request to URL and print the response\n\
             go2web -s <search-term> # search the term and print top 10 results\n\
             go2web -h               # show help\n\
-            go2web -cache               # show current cached response\n")
+            go2web -cache           # show current cached response\n\
+            go2web -c               # clear the cache\n")
 
 
 def url_request(url, max_redirects=2, redirect_count=0):
@@ -49,7 +51,6 @@ def url_request(url, max_redirects=2, redirect_count=0):
             request = f"GET /{path} HTTP/1.0\r\nHost: {host}\r\nAccept: text/html, application/json\r\n\r\n"
             sslsock.send(request.encode())
 
-            # Receive the response from the server
             response = bytearray()
             for data in iter(lambda: sslsock.recv(4096), b""):
                 response.extend(data)
@@ -81,8 +82,13 @@ def url_request(url, max_redirects=2, redirect_count=0):
                     text = soup.get_text(separator='\n', strip=True)
                     text = unidecode(text)
                     print(text)
-
                 cached_responses[url] = (response_str, time.time())
+
+
+def clear_cache():
+    global cached_responses
+    cached_responses = {}
+    print("Cache has been cleared.")
 
 def show_cache():
     if cached_responses:
@@ -93,20 +99,19 @@ def show_cache():
             print(f"Timestamp: {datetime.datetime.fromtimestamp(timestamp)}\n")
     else:
         print("Cache is empty.")
+
+
 def search(query):
-    # Define the host and SSL context
 
     host = "www.googleapis.com"
     context = ssl.create_default_context()
 
-    # Establish a connection with the host and send an HTTP GET request
     with socket.create_connection((host, 443)) as sock:
         with context.wrap_socket(sock, server_hostname=host) as sslsock:
             # Compose the HTTP GET request to search for the query on Google Custom Search API
             request = f"GET https://www.googleapis.com/customsearch/v1?key={GOOGLE_API_KEY}&cx={GOOGLE_CX}&q={query} HTTP/1.0\r\nHost:{host}\r\nAccept: text/html, application/json\r\n\r\n"
             sslsock.send(request.encode())
 
-            # Receive the response from the server and parse the JSON data
             resp_str = ''
             for data in iter(lambda: sslsock.recv(4096), b""):
                 resp_str += data.decode('utf-8')
@@ -126,7 +131,6 @@ def search(query):
                 print(f"{i}. {title}")
                 print(f"Link: {link}\n")
 
-            # Store the links in a global list variable
             global link_list
             link_list = [item["link"] for item in response["items"]]
 
@@ -149,28 +153,35 @@ def access_link():
         except:
             print(f"Invalid input. Please enter a number between 1 and {RESULTS_NR} or 'exit'.")
 
+
 def main():
     command = sys.argv
 
-    if len(command) >= 3:
-        if command[1] == "-u":
+    # Command-line mode
+    if len(command) > 1:
+        if command[1] == "-h":
+            help()
+        elif command[1] == "-cache":
+            show_cache()
+        elif command[1] == "-c":
+            clear_cache()
+        elif command[1] == "-u" and len(command) > 2:
             url_request(command[2])
-        elif command[1] == "-s":
+        elif command[1] == "-s" and len(command) > 2:
             search('+'.join(command[2:]))
         else:
             print("Invalid command")
+            help()
 
-    elif len(command) == 2 and command[1] == "-h":
-        help()
-
-    elif len(command) == 2 and command[1] == "-cache":
-        show_cache()  
+    # Interactive mode
     else:
         while True:
             user_input = input("Enter a command (enter go2web -h to see all commands) or 'exit' to exit:\n> ")
             command = user_input.split()
+
             if len(command) == 0:
                 continue
+            if command[0] == "exit":
             elif command[0] == "go2web":
                 if len(command) >= 3:
                     if command[1] == "-u":
@@ -187,6 +198,26 @@ def main():
                     print("Invalid command")
             elif command[0] == "exit":
                 break
+
+            if command[0] != "go2web":
+                print("Invalid command. Use 'go2web' followed by an option.")
+                continue
+
+            if len(command) == 1:
+                print("Missing option. Use 'go2web -h' to see available commands.")
+                continue
+
+            # Process commands
+            if command[1] == "-h":
+                help()
+            elif command[1] == "-cache":
+                show_cache()
+            elif command[1] == "-c":
+                clear_cache()
+            elif command[1] == "-u" and len(command) > 2:
+                url_request(command[2])
+            elif command[1] == "-s" and len(command) > 2:
+                search('+'.join(command[2:]))
             else:
                 print("Invalid command")
 
