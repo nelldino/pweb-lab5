@@ -32,23 +32,20 @@ def url_request(url, max_redirects=2, redirect_count=0):
     # Split the URL into the host and path
     host, path = url.split('/', 1) if '/' in url else (url, "")
 
-    # Create a SSL context
     context = ssl.create_default_context()
 
-    # check if the response is available in the cache
+    # Check if the response is available in the cache
     if url in cached_responses:
         cached_response, cached_time = cached_responses[url]
         current_time = time.time()
-        # check if the cached response is still valid
+        # Check if the cached response is still valid
         if current_time - cached_time < 300:
             print("\n================== RETURNING CACHE RESPONSE ==================\n")
             print(cached_response)
             return
 
-    # Create a socket connection and wrap it with SSL
     with socket.create_connection((host, 443)) as sock:
         with context.wrap_socket(sock, server_hostname=host) as sslsock:
-            # Send a GET request to the server
             request = f"GET /{path} HTTP/1.0\r\nHost: {host}\r\nAccept: text/html, application/json\r\n\r\n"
             sslsock.send(request.encode())
 
@@ -56,8 +53,6 @@ def url_request(url, max_redirects=2, redirect_count=0):
             response = bytearray()
             for data in iter(lambda: sslsock.recv(4096), b""):
                 response.extend(data)
-
-            # Decode the response and extract the status code
             response_str = response.decode('utf-8')
             status_code = int(response_str.split()[1])
 
@@ -69,19 +64,25 @@ def url_request(url, max_redirects=2, redirect_count=0):
                     webbrowser.open(new_url)
                     url_request(new_url, max_redirects, redirect_count + 1)
                     print(f"\nPress enter to exit.")
-
                 else:
                     print(f"Too many redirects for {url}.")
-
             else:
-                # Extract the HTML content from the response
-                soup = BeautifulSoup(response.split(b'\r\n\r\n', 1)[1].decode('utf-8'), 'html.parser')
-                text = soup.get_text(separator='\n', strip=True)
-                text = unidecode(text)
-                print(text)
+                # Check if the response contains JSON
+                if 'application/json' in response_str:
+                    try:
+                        json_data = json.loads(response_str.split('\r\n\r\n', 1)[1])  # Extract JSON part
+                        print(json.dumps(json_data, indent=2))  # Pretty print the JSON
+                    except json.JSONDecodeError:
+                        print("Failed to decode JSON.")
+                else:
+                    # If the response is not JSON, print HTML content
+                    print("Response is not JSON. Raw HTML content:")
+                    soup = BeautifulSoup(response.split(b'\r\n\r\n', 1)[1].decode('utf-8'), 'html.parser')
+                    text = soup.get_text(separator='\n', strip=True)
+                    text = unidecode(text)
+                    print(text)
 
-                # store the response in the cache
-                cached_responses[url] = (text, time.time())
+                cached_responses[url] = (response_str, time.time())
 
 def show_cache():
     if cached_responses:
@@ -94,6 +95,7 @@ def show_cache():
         print("Cache is empty.")
 def search(query):
     # Define the host and SSL context
+
     host = "www.googleapis.com"
     context = ssl.create_default_context()
 
@@ -113,11 +115,7 @@ def search(query):
             json_end = resp_str.rfind("}") + 1
             json_str = resp_str[json_start:json_end]
 
-            try:
-                response = json.loads(json_str)
-            except json.JSONDecodeError:
-                print("Failed to decode JSON.")
-                return
+            response = ast.literal_eval(json_str)
 
             print(f"Top {RESULTS_NR} search results for '{query}':\n")
 
@@ -136,9 +134,7 @@ def search(query):
             access_link()
 
 
-
 def access_link():
-    # Loop through the search results and prompt the user to choose a link to open
     for i in range(RESULTS_NR + 1):
         print(f"Enter a number between 1 and {RESULTS_NR} to open a link, or 'exit' to exit.\n")
         user_input = input()
@@ -179,7 +175,6 @@ def main():
                 if len(command) >= 3:
                     if command[1] == "-u":
                         url_request(command[2])
-                        print("url")
                     elif command[1] == "-s":
                         search('+'.join(command[2:]))
                     else:
