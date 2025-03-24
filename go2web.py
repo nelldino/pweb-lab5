@@ -94,7 +94,6 @@ def clear_cache():
     cached_responses = {}
     print("Cache has been cleared.")
 
-
 def show_cache():
     if cached_responses:
         print("\nCurrent Cache:")
@@ -104,7 +103,6 @@ def show_cache():
             print(f"Timestamp: {datetime.datetime.fromtimestamp(timestamp)}\n")
     else:
         print("Cache is empty.")
-
 
 def search(query):
     host = "www.googleapis.com"
@@ -138,7 +136,7 @@ def search(query):
                 link = item.get("link", "No link available")
                 print(f"{i}. {title}\n   Link: {link}\n")
                 link_list.append(link)
-
+            # Call the access_link function to allow the user to open a lin
             access_link()
 
 
