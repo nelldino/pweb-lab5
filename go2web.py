@@ -22,10 +22,8 @@ def help():
             go2web -c               # clear the cache\n")
 
 
-def url_request(url, max_redirects=5, redirect_count=0, visited_urls=None):
-    if visited_urls is None:
-        visited_urls = set()
 
+def url_request(url, max_redirects=2, redirect_count=0):
     if url.startswith("https://"):
         protocol = "https"
         url = url[8:]
@@ -38,21 +36,18 @@ def url_request(url, max_redirects=5, redirect_count=0, visited_urls=None):
         protocol = "http"
         port = 80
 
-    # Safely extract the host and path
     if '/' in url:
         host, path = url.split('/', 1)
         path = '/' + path
     else:
         host = url
         path = '/'
-
     # Avoid infinite loops in case of cyclic redirects
     if url in visited_urls:
         print(f"Detected redirect loop for {url}. Aborting!")
         return
     visited_urls.add(url)
 
-    # Check the cache
     if url in cached_responses:
         cached_response, cached_time = cached_responses[url]
         if time.time() - cached_time < 300:
@@ -73,6 +68,14 @@ def url_request(url, max_redirects=5, redirect_count=0, visited_urls=None):
                 f"Accept: text/html, application/json\r\n"
                 f"Connection: close\r\n\r\n"
             )
+            
+    # Initially connect via HTTP (port 80)
+    port = 80
+    context = None
+
+    try:
+        with socket.create_connection((host, port)) as sock:
+            request = f"GET {path} HTTP/1.0\r\nHost: {host}\r\nAccept: text/html, application/json\r\n\r\n"
             sock.send(request.encode())
 
             response = bytearray()
@@ -117,6 +120,7 @@ def url_request(url, max_redirects=5, redirect_count=0, visited_urls=None):
     except Exception as e:
         print(f"An error occurred: {e}")
 
+      
 def clear_cache():
     global cached_responses
     cached_responses = {}
