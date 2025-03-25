@@ -22,12 +22,23 @@ def help():
             go2web -c               # clear the cache\n")
 
 
-def url_request(url, max_redirects=2, redirect_count=0):
-    if url.startswith("https://"):
-        url = url[8:]
-    elif url.startswith("http://"):
-        url = url[7:]
+def url_request(url, max_redirects=5, redirect_count=0, visited_urls=None):
+    if visited_urls is None:
+        visited_urls = set()
 
+    if url.startswith("https://"):
+        protocol = "https"
+        url = url[8:]
+        port = 443
+    elif url.startswith("http://"):
+        protocol = "http"
+        url = url[7:]
+        port = 80
+    else:
+        protocol = "http"
+        port = 80
+
+    # Safely extract the host and path
     if '/' in url:
         host, path = url.split('/', 1)
         path = '/' + path
@@ -35,6 +46,13 @@ def url_request(url, max_redirects=2, redirect_count=0):
         host = url
         path = '/'
 
+    # Avoid infinite loops in case of cyclic redirects
+    if url in visited_urls:
+        print(f"Detected redirect loop for {url}. Aborting!")
+        return
+    visited_urls.add(url)
+
+    # Check the cache
     if url in cached_responses:
         cached_response, cached_time = cached_responses[url]
         if time.time() - cached_time < 300:
@@ -42,34 +60,44 @@ def url_request(url, max_redirects=2, redirect_count=0):
             print(cached_response)
             return
 
-    # Initially connect via HTTP (port 80)
-    port = 80
-    context = None
-
     try:
+        # Use SSL if protocol is HTTPS
+        context = ssl.create_default_context() if protocol == "https" else None
         with socket.create_connection((host, port)) as sock:
-            request = f"GET {path} HTTP/1.0\r\nHost: {host}\r\nAccept: text/html, application/json\r\n\r\n"
+            if context:
+                sock = context.wrap_socket(sock, server_hostname=host)
+
+            request = (
+                f"GET {path} HTTP/1.1\r\n"
+                f"Host: {host}\r\n"
+                f"Accept: text/html, application/json\r\n"
+                f"Connection: close\r\n\r\n"
+            )
             sock.send(request.encode())
 
             response = bytearray()
             for data in iter(lambda: sock.recv(4096), b""):
                 response.extend(data)
 
-        response_str = response.decode('utf-8', errors='ignore')
+        try:
+            response_str = response.decode('utf-8')
+        except UnicodeDecodeError:
+            response_str = response.decode('iso-8859-1', errors='ignore')
+
         status_code = int(response_str.split()[1])
 
         if 300 <= status_code < 400:
             if 'Location: ' in response_str and redirect_count < max_redirects:
                 new_url = response_str.split('Location: ')[1].split()[0].strip()
 
-                if new_url.startswith("https://"):
-                    print(f"Redirecting to secure HTTPS: {new_url}...")
-                    return url_request(new_url, max_redirects, redirect_count + 1)
-                else:
-                    print(f"Redirecting to: {new_url}...")
-                    return url_request(new_url, max_redirects, redirect_count + 1)
+                # Ensure the new URL has a protocol
+                if not new_url.startswith("http"):
+                    new_url = f"{protocol}://{host}{new_url}"
 
-        # Check if the response is JSON
+                print(f"Redirecting to safe url https: {new_url}...")
+                return url_request(new_url, max_redirects, redirect_count + 1, visited_urls)
+
+
         if 'application/json' in response_str:
             try:
                 json_data = json.loads(response_str.split('\r\n\r\n', 1)[1])
@@ -80,8 +108,8 @@ def url_request(url, max_redirects=2, redirect_count=0):
             except json.JSONDecodeError:
                 print("Failed to decode JSON response.")
 
-        else:  # If not JSON, handle as HTML
-            soup = BeautifulSoup(response.split(b'\r\n\r\n', 1)[1].decode('utf-8'), 'html.parser')
+        else:
+            soup = BeautifulSoup(response.split(b'\r\n\r\n', 1)[1].decode('utf-8', errors='ignore'), 'html.parser')
             text = unidecode(soup.get_text(separator='\n', strip=True))
             print("\n================== HTML RESPONSE ==================\n")
             print(text)
@@ -89,6 +117,7 @@ def url_request(url, max_redirects=2, redirect_count=0):
 
     except Exception as e:
         print(f"An error occurred: {e}")
+
 def clear_cache():
     global cached_responses
     cached_responses = {}
