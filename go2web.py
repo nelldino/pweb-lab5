@@ -90,7 +90,6 @@ def url_request(url, max_redirects=5, redirect_count=0, visited_urls=None):
             if 'Location: ' in response_str and redirect_count < max_redirects:
                 new_url = response_str.split('Location: ')[1].split()[0].strip()
 
-                # Ensure the new URL has a protocol
                 if not new_url.startswith("http"):
                     new_url = f"{protocol}://{host}{new_url}"
 
